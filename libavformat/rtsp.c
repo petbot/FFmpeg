@@ -90,8 +90,9 @@ const AVOption ff_rtsp_options[] = {
     RTSP_MEDIATYPE_OPTS("allowed_media_types", "set media types to accept from the server"),
     { "min_port", "set minimum local UDP port", OFFSET(rtp_port_min), AV_OPT_TYPE_INT, {.i64 = RTSP_RTP_PORT_MIN}, 0, 65535, DEC|ENC },
     { "max_port", "set maximum local UDP port", OFFSET(rtp_port_max), AV_OPT_TYPE_INT, {.i64 = RTSP_RTP_PORT_MAX}, 0, 65535, DEC|ENC },
+    { "adv_port", "set adv PORT : MISKO ", OFFSET(rtp_port_adv), AV_OPT_TYPE_INT, {.i64 = RTSP_RTP_PORT_ADV}, 0, 65535, DEC|ENC },
     { "timeout", "set maximum timeout (in seconds) to wait for incoming connections (-1 is infinite, imply flag listen)", OFFSET(initial_timeout), AV_OPT_TYPE_INT, {.i64 = -1}, INT_MIN, INT_MAX, DEC },
-    { "stimeout", "set timeout (in microseconds) of socket TCP I/O operations", OFFSET(stimeout), AV_OPT_TYPE_INT, {.i64 = 0}, INT_MIN, INT_MAX, DEC },
+    { "stimeout", "set timeout (in micro seconds) of socket TCP I/O operations", OFFSET(stimeout), AV_OPT_TYPE_INT, {.i64 = 0}, INT_MIN, INT_MAX, DEC },
     RTSP_REORDERING_OPTS(),
     { "user-agent", "override User-Agent header", OFFSET(user_agent), AV_OPT_TYPE_STRING, {.str = LIBAVFORMAT_IDENT}, 0, 0, DEC },
     { NULL },
@@ -296,9 +297,6 @@ typedef struct SDPParseState {
     struct RTSPSource **default_include_source_addrs; /**< Source-specific multicast include source IP address (from SDP content) */
     int nb_default_exclude_source_addrs; /**< Number of source-specific multicast exclude source IP address (from SDP content) */
     struct RTSPSource **default_exclude_source_addrs; /**< Source-specific multicast exclude source IP address (from SDP content) */
-    int seen_rtpmap;
-    int seen_fmtp;
-    char delayed_fmtp[2048];
 } SDPParseState;
 
 static void copy_default_source_addrs(struct RTSPSource **addrs, int count,
@@ -316,22 +314,6 @@ static void copy_default_source_addrs(struct RTSPSource **addrs, int count,
     }
 }
 
-static void parse_fmtp(AVFormatContext *s, RTSPState *rt,
-                       int payload_type, const char *line)
-{
-    int i;
-
-    for (i = 0; i < rt->nb_rtsp_streams; i++) {
-        RTSPStream *rtsp_st = rt->rtsp_streams[i];
-        if (rtsp_st->sdp_payload_type == payload_type &&
-            rtsp_st->dynamic_handler &&
-            rtsp_st->dynamic_handler->parse_sdp_a_line) {
-            rtsp_st->dynamic_handler->parse_sdp_a_line(s, i,
-            rtsp_st->dynamic_protocol_context, line);
-        }
-    }
-}
-
 static void sdp_parse_line(AVFormatContext *s, SDPParseState *s1,
                            int letter, const char *buf)
 {
@@ -339,7 +321,7 @@ static void sdp_parse_line(AVFormatContext *s, SDPParseState *s1,
     char buf1[64], st_type[64];
     const char *p;
     enum AVMediaType codec_type;
-    int payload_type;
+    int payload_type, i;
     AVStream *st;
     RTSPStream *rtsp_st;
     RTSPSource *rtsp_src;
@@ -388,9 +370,7 @@ static void sdp_parse_line(AVFormatContext *s, SDPParseState *s1,
         break;
     case 'm':
         /* new stream */
-        s1->skip_media  = 0;
-        s1->seen_fmtp   = 0;
-        s1->seen_rtpmap = 0;
+        s1->skip_media = 0;
         codec_type = AVMEDIA_TYPE_UNKNOWN;
         get_word(st_type, sizeof(st_type), &p);
         if (!strcmp(st_type, "audio")) {
@@ -513,20 +493,19 @@ static void sdp_parse_line(AVFormatContext *s, SDPParseState *s1,
                 st = s->streams[rtsp_st->stream_index];
                 sdp_parse_rtpmap(s, st, rtsp_st, payload_type, p);
             }
-            s1->seen_rtpmap = 1;
-            if (s1->seen_fmtp) {
-                parse_fmtp(s, rt, payload_type, s1->delayed_fmtp);
-            }
         } else if (av_strstart(p, "fmtp:", &p) ||
                    av_strstart(p, "framesize:", &p)) {
+            /* NOTE: fmtp is only supported AFTER the 'a=rtpmap:xxx' tag */
             // let dynamic protocol handlers have a stab at the line.
             get_word(buf1, sizeof(buf1), &p);
             payload_type = atoi(buf1);
-            if (s1->seen_rtpmap) {
-                parse_fmtp(s, rt, payload_type, buf);
-            } else {
-                s1->seen_fmtp = 1;
-                av_strlcpy(s1->delayed_fmtp, buf, sizeof(s1->delayed_fmtp));
+            for (i = 0; i < rt->nb_rtsp_streams; i++) {
+                rtsp_st = rt->rtsp_streams[i];
+                if (rtsp_st->sdp_payload_type == payload_type &&
+                    rtsp_st->dynamic_handler &&
+                    rtsp_st->dynamic_handler->parse_sdp_a_line)
+                    rtsp_st->dynamic_handler->parse_sdp_a_line(s, i,
+                        rtsp_st->dynamic_protocol_context, buf);
             }
         } else if (av_strstart(p, "range:", &p)) {
             int64_t start, end;
@@ -658,7 +637,7 @@ int ff_sdp_parse(AVFormatContext *s, const char *content)
         av_free(s1->default_exclude_source_addrs[i]);
     av_freep(&s1->default_exclude_source_addrs);
 
-    rt->p = av_malloc_array(rt->nb_rtsp_streams + 1, sizeof(struct pollfd) * 2);
+    rt->p = av_malloc(sizeof(struct pollfd)*2*(rt->nb_rtsp_streams+1));
     if (!rt->p) return AVERROR(ENOMEM);
     return 0;
 }
@@ -760,7 +739,6 @@ int ff_rtsp_open_transport_ctx(AVFormatContext *s, RTSPStream *rtsp_st)
         rtsp_st->rtp_handle = NULL;
         if (ret < 0)
             return ret;
-        st->time_base = ((AVFormatContext*)rtsp_st->transport_priv)->streams[0]->time_base;
     } else if (rt->transport == RTSP_TRANSPORT_RAW) {
         return 0; // Don't need to open any parser here
     } else if (rt->transport == RTSP_TRANSPORT_RDT && CONFIG_RTPDEC)
@@ -1418,13 +1396,31 @@ int ff_rtsp_make_setup_request(AVFormatContext *s, const char *host, int port,
         have_port:
             snprintf(transport, sizeof(transport) - 1,
                      "%s/UDP;", trans_pref);
+		//MISKO MOD START
+	    if (rt->rtp_port_adv>0) {
+
             if (rt->server_type != RTSP_SERVER_REAL)
                 av_strlcat(transport, "unicast;", sizeof(transport));
             av_strlcatf(transport, sizeof(transport),
-                     "client_port=%d", port);
+                     "client_port=%d", rt->rtp_port_adv); //MISKO WROTE
             if (rt->transport == RTSP_TRANSPORT_RTP &&
                 !(rt->server_type == RTSP_SERVER_WMS && i > 0))
-                av_strlcatf(transport, sizeof(transport), "-%d", port + 1);
+                av_strlcatf(transport, sizeof(transport), "-%d",
+			rt->rtp_port_adv + 1); //MISKO WROTE
+
+	    } else {
+		    if (rt->server_type != RTSP_SERVER_REAL)
+			av_strlcat(transport, "unicast;", sizeof(transport));
+		    av_strlcatf(transport, sizeof(transport),
+			     "client_port=%d", port); //MISKO COMMENTED
+		    if (rt->transport == RTSP_TRANSPORT_RTP &&
+			!(rt->server_type == RTSP_SERVER_WMS && i > 0))
+			av_strlcatf(transport, sizeof(transport), "-%d",
+			      port + 1); //MISKO COMMENTED
+
+
+	    }
+		//MISKO MOD END
         }
 
         /* RTP/TCP */
