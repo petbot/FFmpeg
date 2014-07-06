@@ -144,6 +144,10 @@ static int tcp_open(URLContext *h, const char *uri, int flags)
     h->is_streamed = 1;
     s->fd = fd;
     freeaddrinfo(ai);
+    
+    int set = 1; //MISKO
+    setsockopt(s->fd, SOL_SOCKET, SO_NOSIGPIPE, (void *)&set, sizeof(int)); //MISKO
+    
     return 0;
 
  fail:
