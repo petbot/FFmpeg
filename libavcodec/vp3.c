@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2004 the ffmpeg project
+ * Copyright (c) 2003-2004 The FFmpeg Project
  *
  * This file is part of FFmpeg.
  *
@@ -1032,7 +1032,7 @@ static int unpack_vlcs(Vp3DecodeContext *s, GetBitContext *gb,
     if (blocks_ended > s->num_coded_frags[plane][coeff_index])
         av_log(s->avctx, AV_LOG_ERROR, "More blocks ended than coded!\n");
 
-    // decrement the number of blocks that have higher coeffecients for each
+    // decrement the number of blocks that have higher coefficients for each
     // EOB run at this level
     if (blocks_ended)
         for (i = coeff_index + 1; i < 64; i++)
@@ -1429,7 +1429,7 @@ static void vp3_draw_horiz_band(Vp3DecodeContext *s, int y)
                                   0);
     }
 
-    if (s->avctx->draw_horiz_band == NULL)
+    if (!s->avctx->draw_horiz_band)
         return;
 
     h = y - s->last_slice_end;

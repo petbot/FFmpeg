@@ -163,6 +163,7 @@ void av_register_all(void)
     REGISTER_MUXDEMUX(LATM,             latm);
     REGISTER_DEMUXER (LMLM4,            lmlm4);
     REGISTER_DEMUXER (LOAS,             loas);
+    REGISTER_MUXDEMUX(LRC,              lrc);
     REGISTER_DEMUXER (LVF,              lvf);
     REGISTER_DEMUXER (LXF,              lxf);
     REGISTER_MUXDEMUX(M4V,              m4v);
@@ -273,8 +274,8 @@ void av_register_all(void)
     REGISTER_DEMUXER (SMUSH,            smush);
     REGISTER_DEMUXER (SOL,              sol);
     REGISTER_MUXDEMUX(SOX,              sox);
+    REGISTER_MUXER   (SPX,              spx);
     REGISTER_MUXDEMUX(SPDIF,            spdif);
-    REGISTER_MUXER   (SPEEX,            speex);
     REGISTER_MUXDEMUX(SRT,              srt);
     REGISTER_DEMUXER (STR,              str);
     REGISTER_DEMUXER (SUBVIEWER1,       subviewer1);
@@ -306,6 +307,7 @@ void av_register_all(void)
     REGISTER_MUXDEMUX(WAV,              wav);
     REGISTER_DEMUXER (WC3,              wc3);
     REGISTER_MUXER   (WEBM,             webm);
+    REGISTER_MUXDEMUX(WEBM_DASH_MANIFEST, webm_dash_manifest);
     REGISTER_MUXDEMUX(WEBVTT,           webvtt);
     REGISTER_DEMUXER (WSAUD,            wsaud);
     REGISTER_DEMUXER (WSVQA,            wsvqa);
@@ -323,11 +325,13 @@ void av_register_all(void)
     REGISTER_DEMUXER (IMAGE_DPX_PIPE,        image_dpx_pipe);
     REGISTER_DEMUXER (IMAGE_EXR_PIPE,        image_exr_pipe);
     REGISTER_DEMUXER (IMAGE_J2K_PIPE,        image_j2k_pipe);
+    REGISTER_DEMUXER (IMAGE_JPEGLS_PIPE,     image_jpegls_pipe);
     REGISTER_DEMUXER (IMAGE_PICTOR_PIPE,     image_pictor_pipe);
     REGISTER_DEMUXER (IMAGE_PNG_PIPE,        image_png_pipe);
     REGISTER_DEMUXER (IMAGE_SGI_PIPE,        image_sgi_pipe);
     REGISTER_DEMUXER (IMAGE_SUNRAST_PIPE,    image_sunrast_pipe);
     REGISTER_DEMUXER (IMAGE_TIFF_PIPE,       image_tiff_pipe);
+    REGISTER_DEMUXER (IMAGE_WEBP_PIPE,       image_webp_pipe);
 
 
     /* protocols */
@@ -345,6 +349,7 @@ void av_register_all(void)
     REGISTER_PROTOCOL(HTTP,             http);
     REGISTER_PROTOCOL(HTTPPROXY,        httpproxy);
     REGISTER_PROTOCOL(HTTPS,            https);
+    REGISTER_PROTOCOL(ICECAST,          icecast);
     REGISTER_PROTOCOL(MMSH,             mmsh);
     REGISTER_PROTOCOL(MMST,             mmst);
     REGISTER_PROTOCOL(MD5,              md5);
@@ -375,4 +380,5 @@ void av_register_all(void)
     REGISTER_PROTOCOL(LIBRTMPT,         librtmpt);
     REGISTER_PROTOCOL(LIBRTMPTE,        librtmpte);
     REGISTER_PROTOCOL(LIBSSH,           libssh);
+    REGISTER_PROTOCOL(LIBSMBCLIENT,     libsmbclient);
 }

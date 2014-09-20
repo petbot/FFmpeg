@@ -278,6 +278,13 @@ static int parse_object_segment(AVCodecContext *avctx,
     /* Decode rle bitmap length, stored size includes width/height data */
     rle_bitmap_len = bytestream_get_be24(&buf) - 2*2;
 
+    if (buf_size > rle_bitmap_len) {
+        av_log(avctx, AV_LOG_ERROR,
+               "Buffer dimension %d larger than the expected RLE data %d\n",
+               buf_size, rle_bitmap_len);
+        return AVERROR_INVALIDDATA;
+    }
+
     /* Get bitmap dimensions from data */
     width  = bytestream_get_be16(&buf);
     height = bytestream_get_be16(&buf);
@@ -285,11 +292,6 @@ static int parse_object_segment(AVCodecContext *avctx,
     /* Make sure the bitmap is not too large */
     if (avctx->width < width || avctx->height < height) {
         av_log(avctx, AV_LOG_ERROR, "Bitmap dimensions larger than video.\n");
-        return AVERROR_INVALIDDATA;
-    }
-
-    if (buf_size > rle_bitmap_len) {
-        av_log(avctx, AV_LOG_ERROR, "too much RLE data\n");
         return AVERROR_INVALIDDATA;
     }
 
@@ -638,7 +640,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size,
             ret = parse_object_segment(avctx, buf, segment_length);
             break;
         case PRESENTATION_SEGMENT:
-            ret = parse_presentation_segment(avctx, buf, segment_length, avpkt->pts);
+            ret = parse_presentation_segment(avctx, buf, segment_length, ((AVSubtitle*)(data))->pts);
             break;
         case WINDOW_SEGMENT:
             /*
