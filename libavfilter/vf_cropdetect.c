@@ -40,6 +40,7 @@ typedef struct CropDetectContext {
     int reset_count;
     int frame_nb;
     int max_pixsteps[4];
+    int max_outliers;
 } CropDetectContext;
 
 static int query_formats(AVFilterContext *ctx)
@@ -49,6 +50,7 @@ static int query_formats(AVFilterContext *ctx)
         AV_PIX_FMT_YUV422P, AV_PIX_FMT_YUVJ422P,
         AV_PIX_FMT_YUV444P, AV_PIX_FMT_YUVJ444P,
         AV_PIX_FMT_YUV411P, AV_PIX_FMT_GRAY8,
+        AV_PIX_FMT_YUV440P, AV_PIX_FMT_YUV410P,
         AV_PIX_FMT_NV12,    AV_PIX_FMT_NV21,
         AV_PIX_FMT_NONE
     };
@@ -122,6 +124,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *frame)
     int bpp = s->max_pixsteps[0];
     int w, h, x, y, shrink_by;
     AVDictionary **metadata;
+    int outliers, last_y;
 
     // ignore first 2 frames - they may be empty
     if (++s->frame_nb > 0) {
@@ -136,33 +139,23 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *frame)
             s->frame_nb = 1;
         }
 
-        for (y = 0; y < s->y1; y++) {
-            if (checkline(ctx, frame->data[0] + frame->linesize[0] * y, bpp, frame->width, bpp) > s->limit) {
-                s->y1 = y;
-                break;
-            }
+#define FIND(DST, FROM, NOEND, INC, STEP0, STEP1, LEN) \
+        outliers = 0;\
+        for (last_y = y = FROM; NOEND; y = y INC) {\
+            if (checkline(ctx, frame->data[0] + STEP0 * y, STEP1, LEN, bpp) > s->limit) {\
+                if (++outliers > s->max_outliers) { \
+                    DST = last_y;\
+                    break;\
+                }\
+            } else\
+                last_y = y INC;\
         }
 
-        for (y = frame->height - 1; y > FFMAX(s->y2, s->y1); y--) {
-            if (checkline(ctx, frame->data[0] + frame->linesize[0] * y, bpp, frame->width, bpp) > s->limit) {
-                s->y2 = y;
-                break;
-            }
-        }
+        FIND(s->y1,                 0,               y < s->y1, +1, frame->linesize[0], bpp, frame->width);
+        FIND(s->y2, frame->height - 1, y > FFMAX(s->y2, s->y1), -1, frame->linesize[0], bpp, frame->width);
+        FIND(s->x1,                 0,               y < s->x1, +1, bpp, frame->linesize[0], frame->height);
+        FIND(s->x2,  frame->width - 1, y > FFMAX(s->x2, s->x1), -1, bpp, frame->linesize[0], frame->height);
 
-        for (y = 0; y < s->x1; y++) {
-            if (checkline(ctx, frame->data[0] + bpp*y, frame->linesize[0], frame->height, bpp) > s->limit) {
-                s->x1 = y;
-                break;
-            }
-        }
-
-        for (y = frame->width - 1; y > FFMAX(s->x2, s->x1); y--) {
-            if (checkline(ctx, frame->data[0] + bpp*y, frame->linesize[0], frame->height, bpp) > s->limit) {
-                s->x2 = y;
-                break;
-            }
-        }
 
         // round x and y (up), important for yuv colorspaces
         // make sure they stay rounded!
@@ -214,6 +207,7 @@ static const AVOption cropdetect_options[] = {
     { "round", "Value by which the width/height should be divisible", OFFSET(round),       AV_OPT_TYPE_INT, { .i64 = 16 }, 0, INT_MAX, FLAGS },
     { "reset", "Recalculate the crop area after this many frames",    OFFSET(reset_count), AV_OPT_TYPE_INT, { .i64 = 0 },  0, INT_MAX, FLAGS },
     { "reset_count", "Recalculate the crop area after this many frames",OFFSET(reset_count),AV_OPT_TYPE_INT,{ .i64 = 0 },  0, INT_MAX, FLAGS },
+    { "max_outliers", "Threshold count of outliers",                  OFFSET(max_outliers),AV_OPT_TYPE_INT, { .i64 = 0 },  0, INT_MAX, FLAGS },
     { NULL }
 };
 

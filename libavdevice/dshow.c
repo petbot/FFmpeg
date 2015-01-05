@@ -19,13 +19,13 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "dshow_capture.h"
 #include "libavutil/parseutils.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/opt.h"
 #include "libavformat/internal.h"
 #include "libavformat/riff.h"
 #include "avdevice.h"
-#include "dshow_capture.h"
 #include "libavcodec/raw.h"
 
 struct dshow_ctx {
@@ -146,9 +146,9 @@ dshow_read_close(AVFormatContext *s)
         IBaseFilter_Release(ctx->device_filter[AudioDevice]);
 
     if (ctx->device_name[0])
-        av_free(ctx->device_name[0]);
+        av_freep(&ctx->device_name[0]);
     if (ctx->device_name[1])
-        av_free(ctx->device_name[1]);
+        av_freep(&ctx->device_name[1]);
 
     if(ctx->mutex)
         CloseHandle(ctx->mutex);
@@ -294,8 +294,7 @@ dshow_cycle_devices(AVFormatContext *avctx, ICreateDevEnum *devenum,
         }
 
 fail1:
-        if (buf)
-            av_free(buf);
+        av_free(buf);
         if (bag)
             IPropertyBag_Release(bag);
         IMoniker_Release(m);
@@ -458,8 +457,7 @@ next:
     }
 end:
     IAMStreamConfig_Release(config);
-    if (caps)
-        av_free(caps);
+    av_free(caps);
     if (pformat_set)
         *pformat_set = format_set;
 }
